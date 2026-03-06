@@ -1,5 +1,4 @@
 import streamlit as st
-import sqlite3
 import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
@@ -21,8 +20,8 @@ if st.session_state.hub_authenticated:
 st.set_page_config(page_title="Fitness Tracker", layout="wide")
 
 # Database Connection
-conn = sqlite3.connect('work_data.db', check_same_thread=False)
-
+# Pulls the Supabase URL securely from your Streamlit Secrets
+conn = st.connection("postgresql", type="sql", url=st.secrets["DATABASE_URL"])
 # Ensure the fitness table exists with the right columns
 conn.execute('''CREATE TABLE IF NOT EXISTS fitness 
              (date DATE PRIMARY KEY, water INTEGER, steps INTEGER, gym INTEGER, sleep INTEGER)''')
