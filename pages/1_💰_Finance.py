@@ -10,9 +10,9 @@ from dotenv import load_dotenv
 # Pulls the Supabase URL securely from your Streamlit Secrets
 conn = st.connection("postgresql", type="sql", url=st.secrets["DATABASE_URL"])
 # Ensure Expense Table exists
-conn.execute('''CREATE TABLE IF NOT EXISTS expenses 
-             (id INTEGER PRIMARY KEY AUTOINCREMENT, date DATE, description TEXT, amount REAL, category TEXT)''')
-conn.commit()
+# conn.execute('''CREATE TABLE IF NOT EXISTS expenses 
+#              (id INTEGER PRIMARY KEY AUTOINCREMENT, date DATE, description TEXT, amount REAL, category TEXT)''')
+# conn.commit()
 
 def get_data():
     df_s = pd.read_sql_query("SELECT * FROM shifts", conn)
