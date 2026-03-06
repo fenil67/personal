@@ -2,24 +2,21 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
-from tabulate import tabulate
 import os
 from dotenv import load_dotenv
+from sqlalchemy import text
 
-# Database Connection
-# Pulls the Supabase URL securely from your Streamlit Secrets
 conn = st.connection("postgresql", type="sql", url=st.secrets["DATABASE_URL"])
-# Ensure Expense Table exists
-# conn.execute('''CREATE TABLE IF NOT EXISTS expenses 
-#              (id INTEGER PRIMARY KEY AUTOINCREMENT, date DATE, description TEXT, amount REAL, category TEXT)''')
-# conn.commit()
 
 def get_data():
-    df_s = pd.read_sql_query("SELECT * FROM shifts", conn)
-    df_e = pd.read_sql_query("SELECT * FROM expenses", conn)
-    df_s['date'] = pd.to_datetime(df_s['date'])
-    df_e['date'] = pd.to_datetime(df_e['date'])
-    df_s['earnings'] = df_s['hours'] * df_s['pay_rate']
+    df_s = conn.query("SELECT * FROM shifts", ttl=0)
+    df_e = conn.query("SELECT * FROM expenses", ttl=0)
+    
+    if not df_s.empty:
+        df_s['date'] = pd.to_datetime(df_s['date'])
+        df_s['earnings'] = df_s['hours'] * df_s['pay_rate']
+    if not df_e.empty:
+        df_e['date'] = pd.to_datetime(df_e['date'])
     return df_s, df_e
 
 st.set_page_config(page_title="Finance Tracker Pro", layout="wide")
@@ -28,7 +25,6 @@ df_shifts, df_expenses = get_data()
 load_dotenv()
 ASSET_PIN = os.getenv("ASSET_PIN")
 
-# Hub Check (Ensures main lock is open)
 if not st.session_state.get("hub_authenticated"):
     st.warning("Please unlock the Hub first.")
     st.stop()
@@ -40,21 +36,19 @@ if not st.session_state.asset_authenticated:
     st.title("🔒 Asset Vault")
     user_pin = st.text_input("Enter Asset PIN", type="password")
     if st.button("Verify"):
-        if user_pin == ASSET_PIN: # Checks against .env
+        if user_pin == ASSET_PIN:
             st.session_state.asset_authenticated = True
             st.rerun()
         else:
             st.error("Incorrect PIN")
     st.stop()
 
-# Sidebar Lock Button (Always visible once logged in)
 if st.session_state.hub_authenticated:
     if st.sidebar.button("🔒 Lock Entire Hub", use_container_width=True):
         st.session_state.hub_authenticated = False
-        st.session_state.asset_authenticated = False # Lock Asset too
+        st.session_state.asset_authenticated = False
         st.rerun()
 
-# --- SIDEBAR METRICS ---
 st.sidebar.title("📊 Quick Stats")
 if not df_shifts.empty:
     total_earned = df_shifts['earnings'].sum()
@@ -65,7 +59,6 @@ if not df_shifts.empty:
     st.sidebar.metric("Net Cash", f"${(total_earned - total_spent):,.2f}")
     st.sidebar.metric("Hours Worked", f"{total_hours:,.2f}")
 
-# --- TABS ---
 tab1, tab2, tab3, tab4, tab5= st.tabs(["💰 Shifts", "💸 Expenses", "📈 Analytics", "📊 Data", "📅 Custom Future Month Planner"])
 
 with tab1:
@@ -75,8 +68,9 @@ with tab1:
     h = col2.number_input("Hours Worked", min_value=0.0, step=0.5)
     r = col3.number_input("Pay Rate", value=14.0)
     if st.button("Save Shift"):
-        conn.execute("INSERT INTO shifts (date, hours, pay_rate) VALUES (?,?,?)", (d, h, r))
-        conn.commit()
+        with conn.session as s:
+            s.execute(text("INSERT INTO shifts (date, hours, pay_rate) VALUES (:d, :h, :r)"), {"d": d, "h": h, "r": r})
+            s.commit()
         st.rerun()
 
 with tab2:
@@ -87,14 +81,16 @@ with tab2:
     amt = col_e3.number_input("Amount ($)", min_value=0.0, step=1.0)
     cat = st.selectbox("Category", ["Food", "Rent", "Crypto", "Entertainment", "Transport", "Other"])
     if st.button("Save Expense"):
-        conn.execute("INSERT INTO expenses (date, description, amount, category) VALUES (?,?,?,?)", (ed, desc, amt, cat))
-        conn.commit()
+        with conn.session as s:
+            s.execute(text("INSERT INTO expenses (date, description, amount, category) VALUES (:d, :desc, :amt, :cat)"), 
+                      {"d": ed, "desc": desc, "amt": amt, "cat": cat})
+            s.commit()
         st.rerun()
 
 with tab3:
     st.subheader("Financial Breakdown")
     if not df_shifts.empty:
-        m_inc = df_shifts.set_index('date').resample('M')['earnings'].sum().reset_index()
+        m_inc = df_shifts.set_index('date').resample('ME')['earnings'].sum().reset_index()
         fig_inc = px.bar(m_inc, x='date', y='earnings', title="Monthly Income", color_discrete_sequence=['#00CC96'])
         st.plotly_chart(fig_inc, use_container_width=True)
     
@@ -104,20 +100,15 @@ with tab3:
         
 with tab4:
     st.header("Income & Expense Ledger")
-    
     col_left, col_right = st.columns(2)
     
     with col_left:
         st.subheader("Shift History")
         if not df_shifts.empty:
-            # Create a copy and add a total row
             display_shifts = df_shifts[['date', 'hours', 'pay_rate', 'earnings']].copy()
             display_shifts['date'] = display_shifts['date'].dt.strftime('%Y-%m-%d')
-            
-            # Calculate Total
             total_earnings = display_shifts['earnings'].sum()
             total_hours = display_shifts['hours'].sum()
-            
             st.dataframe(display_shifts, use_container_width=True)
             st.info(f"**Total Hours:** {total_hours:.2f} | **Total Income:** ${total_earnings:,.2f}")
         else:
@@ -126,19 +117,14 @@ with tab4:
     with col_right:
         st.subheader("Expense History")
         if not df_expenses.empty:
-            # Create a copy and add a total row
             display_exp = df_expenses[['date', 'description', 'amount', 'category']].copy()
             display_exp['date'] = display_exp['date'].dt.strftime('%Y-%m-%d')
-            
-            # Calculate Total
             total_spent = display_exp['amount'].sum()
-            
             st.dataframe(display_exp, use_container_width=True)
             st.error(f"**Total Expenses:** ${total_spent:,.2f}")
         else:
             st.write("No expenses found.")
 
-    # Final Net Calculation
     if not df_shifts.empty and not df_expenses.empty:
         net_total = total_earnings - total_spent
         color = "green" if net_total > 0 else "red"
@@ -146,8 +132,6 @@ with tab4:
 
 with tab5:
     st.subheader("Manual Growth Projection (Saved to DB)")
-    
-    # 1. UI for Inputs
     col_p1, col_p2, col_p3, col_p4 = st.columns([2, 2, 2, 1])
     sel_month = col_p1.selectbox("Month", ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], key="sel_m")
     sel_year = col_p2.selectbox("Year", [2025, 2026, 2027, 2028], key="sel_y")
@@ -155,49 +139,48 @@ with tab5:
     
     if col_p4.button("➕ Save"):
         month_label = f"{sel_month} {sel_year}"
-        # Create a sort key (e.g., 202602 for Feb 2026) to keep the graph chronological
         m_num = datetime.strptime(sel_month, "%b").month
         sort_val = (sel_year * 100) + m_num
         
-        # Check for duplicates before inserting
-        existing = pd.read_sql_query(f"SELECT * FROM projections WHERE month_year = '{month_label}'", conn)
+        existing = conn.query(f"SELECT * FROM projections WHERE month_year = '{month_label}'", ttl=0)
         if existing.empty:
-            conn.execute("INSERT INTO projections (month_year, hours, earning, sort_key) VALUES (?, ?, ?, ?)",
-                         (month_label, plan_h, plan_h * 14.0, sort_val))
-            conn.commit()
+            with conn.session as s:
+                s.execute(text("INSERT INTO projections (month_year, hours, earning, sort_key) VALUES (:my, :h, :e, :sk)"),
+                          {"my": month_label, "h": plan_h, "e": plan_h * 14.0, "sk": sort_val})
+                s.commit()
             st.rerun()
         else:
             st.warning(f"{month_label} already exists. Delete it below to change it.")
 
-    # 2. Fetch and Display Data
-    df_proj_db = pd.read_sql_query("SELECT * FROM projections ORDER BY sort_key ASC", conn)
+    try:
+        df_proj_db = conn.query("SELECT * FROM projections ORDER BY sort_key ASC", ttl=0)
+        if not df_proj_db.empty:
+            current_net = (df_shifts['earnings'].sum() if not df_shifts.empty else 0) - \
+                          (df_expenses['amount'].sum() if not df_expenses.empty else 0)
+            
+            df_proj_db['Cumulative Balance'] = df_proj_db['earning'].cumsum() + current_net
+            
+            st.write("### Your Roadmap")
+            for index, row in df_proj_db.iterrows():
+                r_col1, r_col2, r_col3, r_col4 = st.columns([2, 2, 2, 1])
+                r_col1.write(row['month_year'])
+                r_col2.write(f"{row['hours']} hrs")
+                r_col3.write(f"${row['earning']:,.2f}")
+                if r_col4.button("🗑️", key=f"del_{row['id']}"):
+                    with conn.session as s:
+                        s.execute(text("DELETE FROM projections WHERE id = :id"), {"id": row['id']})
+                        s.commit()
+                    st.rerun()
 
-    if not df_proj_db.empty:
-        # Calculate Cumulative Balance
-        current_net = (df_shifts['earnings'].sum() if not df_shifts.empty else 0) - \
-                      (df_expenses['amount'].sum() if not df_expenses.empty else 0)
-        
-        df_proj_db['Cumulative Balance'] = df_proj_db['earning'].cumsum() + current_net
-        
-        # Display Table with Delete Buttons
-        st.write("### Your Roadmap")
-        for index, row in df_proj_db.iterrows():
-            r_col1, r_col2, r_col3, r_col4 = st.columns([2, 2, 2, 1])
-            r_col1.write(row['month_year'])
-            r_col2.write(f"{row['hours']} hrs")
-            r_col3.write(f"${row['earning']:,.2f}")
-            if r_col4.button("🗑️", key=f"del_{row['id']}"):
-                conn.execute(f"DELETE FROM projections WHERE id = {row['id']}")
-                conn.commit()
+            total_plan_income = df_proj_db['earning'].sum() + current_net
+            st.success(f"**Total Planned Income for selected months:** ${total_plan_income:,.2f}")
+
+            if st.button("🚨 Clear Entire Plan", type="primary"):
+                with conn.session as s:
+                    s.execute(text("DELETE FROM projections"))
+                    s.commit()
                 st.rerun()
-
-        total_plan_income = df_proj_db['earning'].sum() + current_net
-        st.success(f"**Total Planned Income for selected months:** ${total_plan_income:,.2f}")
-
-        # 4. Bulk Actions
-        if st.button("🚨 Clear Entire Plan", type="primary"):
-            conn.execute("DELETE FROM projections")
-            conn.commit()
-            st.rerun()
-    else:
+        else:
+            st.info("Your plan is empty. Add a month above to start your roadmap.")
+    except:
         st.info("Your plan is empty. Add a month above to start your roadmap.")
