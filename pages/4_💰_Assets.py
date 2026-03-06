@@ -8,24 +8,25 @@ from dotenv import load_dotenv
 
 st.set_page_config(page_title="Asset Manager", layout="wide")
 
+# Pulls the Supabase URL securely from your Streamlit Secrets
+conn = st.connection("postgresql", type="sql", url=st.secrets["DATABASE_URL"])
 # --- SELF-SUSTAINING TABLE CHECK ---
-def init_asset_db():
-    conn = sqlite3.connect('work_data.db', check_same_thread=False)
-    # This command checks if the table exists; if not, it creates it.
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS assets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, 
-            name TEXT UNIQUE, 
-            category TEXT, 
-            value REAL, 
-            last_updated DATE
-        )
-    ''')
-    conn.commit()
-    return conn
+# def init_asset_db():
+#     # This command checks if the table exists; if not, it creates it.
+#     conn.execute('''
+#         CREATE TABLE IF NOT EXISTS assets (
+#             id INTEGER PRIMARY KEY AUTOINCREMENT, 
+#             name TEXT UNIQUE, 
+#             category TEXT, 
+#             value REAL, 
+#             last_updated DATE
+#         )
+#     ''')
+#     conn.commit()
+#     return conn
 
-# Initialize connection
-conn = init_asset_db()
+# # Initialize connection
+# conn = init_asset_db()
 
 
 # --- AUTO-SYNC CASH BALANCE PATCH ---
