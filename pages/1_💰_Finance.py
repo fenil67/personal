@@ -1,5 +1,4 @@
 import streamlit as st
-import sqlite3
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
@@ -8,8 +7,8 @@ import os
 from dotenv import load_dotenv
 
 # Database Connection
-conn = sqlite3.connect('work_data.db', check_same_thread=False)
-
+# Pulls the Supabase URL securely from your Streamlit Secrets
+conn = st.connection("postgresql", type="sql", url=st.secrets["DATABASE_URL"])
 # Ensure Expense Table exists
 conn.execute('''CREATE TABLE IF NOT EXISTS expenses 
              (id INTEGER PRIMARY KEY AUTOINCREMENT, date DATE, description TEXT, amount REAL, category TEXT)''')
