@@ -1,12 +1,12 @@
 import streamlit as st
-import sqlite3
 import pandas as pd
 from datetime import datetime
 import os
 from dotenv import load_dotenv
 
 st.set_page_config(page_title="Fenil's Excellence Hub", layout="wide")
-conn = sqlite3.connect('work_data.db', check_same_thread=False)
+# Pulls the Supabase URL securely from your Streamlit Secrets
+conn = st.connection("postgresql", type="sql", url=st.secrets["DATABASE_URL"])
 
 
 # Load the .env file
