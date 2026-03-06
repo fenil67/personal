@@ -23,9 +23,9 @@ st.set_page_config(page_title="Fitness Tracker", layout="wide")
 # Pulls the Supabase URL securely from your Streamlit Secrets
 conn = st.connection("postgresql", type="sql", url=st.secrets["DATABASE_URL"])
 # Ensure the fitness table exists with the right columns
-conn.execute('''CREATE TABLE IF NOT EXISTS fitness 
-             (date DATE PRIMARY KEY, water INTEGER, steps INTEGER, gym INTEGER, sleep INTEGER)''')
-conn.commit()
+# conn.execute('''CREATE TABLE IF NOT EXISTS fitness 
+#              (date DATE PRIMARY KEY, water INTEGER, steps INTEGER, gym INTEGER, sleep INTEGER)''')
+# conn.commit()
 
 # --- DATA HELPERS ---
 def get_fitness_data():
