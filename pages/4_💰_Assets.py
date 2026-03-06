@@ -8,7 +8,6 @@ from sqlalchemy import text
 
 st.set_page_config(page_title="Asset Manager", layout="wide")
 conn = st.connection("postgresql", type="sql", url=st.secrets["DATABASE_URL"])
-
 def sync_cash_from_finance():
     """Calculates live cash from Finance tables using pandas and updates Assets."""
     try:
@@ -23,7 +22,8 @@ def sync_cash_from_finance():
         df_exp = conn.query("SELECT amount FROM expenses", ttl=0)
         total_expenses = df_exp['amount'].sum() if not df_exp.empty else 0.0
         
-        live_cash = total_income - total_expenses
+        # THE FIX: Wrap the final calculation in float() to strip away the numpy data type
+        live_cash = float(total_income - total_expenses)
         
         with conn.session as s:
             s.execute(text("DELETE FROM assets WHERE name = 'Cash (Live)'"))
