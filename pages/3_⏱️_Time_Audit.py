@@ -1,5 +1,4 @@
 import streamlit as st
-import sqlite3
 import pandas as pd
 import plotly.express as px
 import time
@@ -23,23 +22,23 @@ st.set_page_config(page_title="Time Audit", layout="wide")
 st_autorefresh(interval=1000, key="timer_refresh") 
 
 # --- SELF-SUSTAINING TABLE CHECK ---
-def init_time_db():
-    conn = sqlite3.connect('work_data.db', check_same_thread=False)
-    # Automatically creates the table if it's missing from work_data.db
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS time_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, 
-            date DATE, 
-            activity TEXT, 
-            duration_mins REAL, 
-            description TEXT
-        )
-    ''')
-    conn.commit()
-    return conn
+# Pulls the Supabase URL securely from your Streamlit Secrets
+conn = st.connection("postgresql", type="sql", url=st.secrets["DATABASE_URL"])    # Automatically creates the table if it's missing from work_data.db
+# def init_time_db():
+#     conn.execute('''
+#         CREATE TABLE IF NOT EXISTS time_logs (
+#             id INTEGER PRIMARY KEY AUTOINCREMENT, 
+#             date DATE, 
+#             activity TEXT, 
+#             duration_mins REAL, 
+#             description TEXT
+#         )
+#     ''')
+#     conn.commit()
+#     return conn
 
 # Initialize the connection
-conn = init_time_db()
+# conn = init_time_db()
 
 # --- TIMER STATE ---
 if "start_time" not in st.session_state: st.session_state.start_time = None
